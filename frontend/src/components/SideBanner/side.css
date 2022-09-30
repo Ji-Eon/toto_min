@@ -1,0 +1,16 @@
+.side-banner{
+  position: relative;
+  overflow: visible;
+  min-width: 1200px;
+  margin: 0 auto;
+}
+.left-banner{
+  position: absolute;
+  left: -170px;
+  top: 10px;
+}
+.right-banner {
+  position: absolute;
+  right: -170px;
+  top: 10px;
+}

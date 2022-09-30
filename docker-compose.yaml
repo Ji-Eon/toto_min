@@ -1,0 +1,578 @@
+version: "3"
+
+services:
+  # Certbot은 letsencrypt를 위한 것이지만 병원내 설치 시 사용불가능 (전부다 수동으로 발급해서 인증서 옮겨야함.)
+  # certbot:
+  #   image: certbot/certbot
+  #   volumes:
+  #     - ./data/certbot/conf:/etc/letsencrypt
+  #     - ./data/certbot/www:/var/www/certbot
+  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+  #모니터링 툴로 서버의 CPU 사용량, 메모리 사용량, 프로세스 현황, Disk I/O 등등 전부 확인가능
+  # netdata:
+  #   # Monitoring Tool
+  #   image: netdata/netdata
+  #   hostname: cosmos # set to fqdn of host
+  #   ports:
+  #     - 19999:19999
+  #   cap_add:
+  #     - SYS_PTRACE
+  #   security_opt:
+  #     - apparmor:unconfined
+  #   volumes:
+  #     - /etc/passwd:/host/etc/passwd:ro
+  #     - /etc/group:/host/etc/group:ro
+  #     - /proc:/host/proc:ro
+  #     - /sys:/host/sys:ro
+
+  rabbitmq:
+    container_name: rabbitmq
+    build: rabbitmq
+    hostname: rabbitmq
+    networks:
+      - main
+    expose:
+      - "5672"
+      - "15672"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - ./rabbitmq/definitions.json:/opt/definitions.json:ro
+      - ./rabbitmq/rabbitmq.config:/etc/rabbitmq/rabbitmq.config:ro
+    restart: always
+
+  postgres:
+    container_name: postgres
+    hostname: postgres
+    image: postgres:12.4
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=toto_web 
+    networks:
+      - main
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
+    restart: always
+    volumes:
+      - ./database:/var/lib/postgresql/data
+  portainer:
+    image: portainer/portainer-ce:alpine
+    container_name: portainer
+    restart: always
+    ports:
+      - 9100:9100
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./portainer_data:/data
+
+  # gunicorn을 통한 Django 프로세스 실행 (9개의 워커 & gevent라는 비동기 워커로 실행 그리고 타임아웃시간 400)
+  # 아래 app / app2 / app3 전부 같은 것 (파이썬은 GIL 락이 걸려있어서 싱글스레드기반으로 돌아가므로 프로세스 수를 늘려서 실행하는 것임)
+  app:
+    build: .
+    command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+      python manage.py collectstatic --no-input &&
+      python manage.py makemigrations &&
+      python manage.py migrate &&
+      gunicorn -b 0.0.0.0:8000 TOTO_TOOLS.wsgi:application "
+    container_name: app
+    depends_on:
+      - postgres
+      - rabbitmq
+      # - nginx
+    restart: always
+    expose:
+      - "8000"
+    hostname: app
+    image: app-image
+    networks:
+      - main
+    environment:
+      - DJANGO_CONFIGURATION=Production # Production 모드로 장고앱 실행
+      - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+      - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+      - EMAIL_HOST_USER=example@example.com
+      - EMAIL_HOST_PASSWORD=example
+      - TZ=Asia/Seoul
+    volumes:
+      - ./media:/usr/src/app/media
+      - ./static:/usr/src/app/static:cached
+      # - .:/usr/src/app # hot reload
+      - upload:/var/www/images/_upload
+ 
+  # app2:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8001 TOTO_TOOLS.wsgi:application"
+  #   container_name: app2
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8001"
+  #   hostname: app2
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - EMAIL_HOST_USER=example@example.com
+  #     - EMAIL_HOST_PASSWORD=example
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static:cached
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+  # app3:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8002 TOTO_TOOLS.wsgi:application"
+  #   container_name: app3
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8002"
+  #   hostname: app3
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - EMAIL_HOST_USER=example@example.com
+  #     - EMAIL_HOST_PASSWORD=example
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+  pgadmin:
+    container_name: pg_admin
+    image: dpage/pgadmin4
+    restart: always
+    networks:
+      - main
+    ports:
+      - "5050:5050"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=medikim3551@gmail.com
+      - PGADMIN_DEFAULT_PASSWORD=akdlfem12!
+  # 업로드를 위한 django 앱
+  upload_app:
+    build: .
+    command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+      python manage.py collectstatic --no-input &&
+      python manage.py makemigrations &&
+      python manage.py migrate &&
+      gunicorn -b 0.0.0.0:8003 TOTO_TOOLS.wsgi:application"
+    container_name: upload_app
+    depends_on:
+      - postgres
+      - rabbitmq
+    restart: always
+    expose:
+      - "8003"
+    hostname: upload_app
+    image: app-image
+    networks:
+      - main
+    environment:
+      - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+      - DJANGO_CONFIGURATION=Production
+      - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+      - TZ=Asia/Seoul
+    volumes:
+      - ./media:/usr/src/app/media
+      - ./static:/usr/src/app/static
+      # - .:/usr/src/app # hot reload
+      - upload:/var/www/images/_upload
+
+  # upload2_app:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8004 TOTO_TOOLS.wsgi:application"
+  #   container_name: upload2_app
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8004"
+  #   hostname: upload2_app
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+
+  # upload3_app:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8005 TOTO_TOOLS.wsgi:application"
+  #   container_name: upload3_app
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8005"
+  #   hostname: upload3_app
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+
+  # upload4_app:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8006 TOTO_TOOLS.wsgi:application"
+  #   container_name: upload4_app
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8006"
+  #   hostname: upload4_app
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+
+  # upload5_app:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8007 TOTO_TOOLS.wsgi:application"
+  #   container_name: upload5_app
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8007"
+  #   hostname: upload5_app
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+
+  # upload6_app:
+  #   build: .
+  #   command: sh -c "./wait-for-it.sh -t 120 postgres:5432 &&
+  #     python manage.py collectstatic --no-input &&
+  #     python manage.py makemigrations &&
+  #     python manage.py migrate &&
+  #     gunicorn -b 0.0.0.0:8008 TOTO_TOOLS.wsgi:application"
+  #   container_name: upload6_app
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #   restart: always
+  #   expose:
+  #     - "8008"
+  #   hostname: upload6_app
+  #   image: app-image
+  #   networks:
+  #     - main
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   volumes:
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     # - .:/usr/src/app # hot reload
+  #     - upload:/var/www/images/_upload
+
+  nginx:
+    restart: always
+    container_name: nginx
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
+    depends_on:
+      - postgres
+      - app
+      # - app2
+      # - app3
+      - upload_app
+      # - upload2_app
+      # - upload3_app
+      # - upload4_app
+      # - upload5_app
+      # - upload6_app
+    networks:
+      - main
+    build: ./nginx
+    expose:
+      - "80"
+      - "443"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # CONFIG
+      - ${PWD}/wait-for:/bin/wait-for
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf/:/etc/nginx/conf
+      # DJANGO APP
+      - ./media:/var/www/app/media
+      - ./static:/var/www/app/static:cached
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+      - upload:/var/www/images/_upload
+  # portainer:
+  #   image: portainer/portainer-ce:alpine
+  #   container_name: portainer
+  #   restart: always
+  #   ports:
+  #     - 9100:9100
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./portainer_data:/data
+
+  # celery worker는 오토스케일이 적용되어있음 Task가 많이 밀려있다면 늘어난다. (하지만 컴퓨터가 늘어나지않는이상은 어차피 disk i/o에 걸려서 높은 향상은 기대하지 못한다.)
+  # 대부분의 운영체제는 async disk i/o를 지원을 하지 않는다. _ 업로드 성능을 올리고싶다면 여러개의 컴퓨터에 프로세스를 띄우고 각 컴퓨터로 파일을 업로드한 후 중앙으로 모아주는 방법을 채택해야함 _ 분산처리 (watcher를 통해 파일이 변하는 걸 감지해서 작업을 진행).
+  celery_worker_1:
+    command: sh -c "./wait-for-it.sh rabbitmq:5672 && ./wait-for-it.sh upload_app:8003 -- celery -A TOTO_TOOLS.celery worker -l info --autoscale=8,4 -O fair --without-gossip --without-mingle"
+    container_name: celery_worker_1
+    depends_on:
+      - postgres
+      - rabbitmq
+      - upload_app
+    hostname: celery_worker_1
+    image: app-image
+    environment:
+      - DJANGO_CONFIGURATION=Production
+      - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+      - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+      - TZ=Asia/Seoul
+    networks:
+      - main
+    volumes:
+      - ${PWD}/wait-for:/bin/wait-for
+      - ./media:/usr/src/app/media
+      - ./static:/usr/src/app/static
+      - upload:/var/www/images/_upload
+
+    restart: always
+
+  # celery_worker_2:
+  #   command: sh -c "./wait-for-it.sh rabbitmq:5672 && ./wait-for-it.sh upload2_app:8004 -- celery -A TOTO_TOOLS.celery worker -l info --autoscale=8,4 -O fair --without-gossip --without-mingle"
+  #   container_name: celery_worker_2
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #     - upload2_app
+  #   hostname: celery_worker_2
+  #   image: app-image
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   networks:
+  #     - main
+  #   volumes:
+  #     - ${PWD}/wait-for:/bin/wait-for
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     - upload:/var/www/images/_upload
+  #   restart: always
+
+  # celery_worker_3:
+  #   command: sh -c "./wait-for-it.sh rabbitmq:5672 && ./wait-for-it.sh upload3_app:8005 -- celery -A TOTO_TOOLS.celery worker -l info --autoscale=8,4 -O fair --without-gossip --without-mingle"
+  #   container_name: celery_worker_3
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #     - upload3_app
+  #   hostname: celery_worker_3
+  #   image: app-image
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   networks:
+  #     - main
+  #   volumes:
+  #     - ${PWD}/wait-for:/bin/wait-for
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     - upload:/var/www/images/_upload
+  #   restart: always
+
+  # celery_worker_4:
+  #   command: sh -c "./wait-for-it.sh rabbitmq:5672 && ./wait-for-it.sh upload4_app:8006 -- celery -A TOTO_TOOLS.celery worker -l info --autoscale=8,4 -O fair --without-gossip --without-mingle"
+  #   container_name: celery_worker_4
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #     - upload4_app
+  #   hostname: celery_worker_4
+  #   image: app-image
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   networks:
+  #     - main
+  #   volumes:
+  #     - ${PWD}/wait-for:/bin/wait-for
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     - upload:/var/www/images/_upload
+  #   restart: always
+
+  # celery_worker_5:
+  #   command: sh -c "./wait-for-it.sh rabbitmq:5672 && ./wait-for-it.sh upload5_app:8007 -- celery -A TOTO_TOOLS.celery worker -l info --autoscale=8,4 -O fair --without-gossip --without-mingle"
+  #   container_name: celery_worker_5
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #     - upload5_app
+  #   hostname: celery_worker_5
+  #   image: app-image
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   networks:
+  #     - main
+  #   volumes:
+  #     - ${PWD}/wait-for:/bin/wait-for
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     - upload:/var/www/images/_upload
+  #   restart: always
+
+  # celery_worker_6:
+  #   command: sh -c "./wait-for-it.sh rabbitmq:5672 && ./wait-for-it.sh upload6_app:8008 -- celery -A TOTO_TOOLS.celery worker -l info --autoscale=8,4 -O fair --without-gossip --without-mingle"
+  #   container_name: celery_worker_6
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+  #     - upload5_app
+  #   hostname: celery_worker_6
+  #   image: app-image
+  #   environment:
+  #     - DJANGO_CONFIGURATION=Production
+  #     - DJANGO_SETTINGS_MODULE=TOTO_TOOLS.config
+  #     - DJANGO_SECRET_KEY=j_uuDSP`4RR-i4tS$X;#9F1Z!e=/$f39D:pyrC)?{>t)4-HLq#
+  #     - TZ=Asia/Seoul
+  #   networks:
+  #     - main
+  #   volumes:
+  #     - ${PWD}/wait-for:/bin/wait-for
+  #     - ./media:/usr/src/app/media
+  #     - ./static:/usr/src/app/static
+  #     - upload:/var/www/images/_upload
+  #   restart: always
+
+  # flower:
+  #   build: flower
+  #   hostname: flower
+  #   container_name: flower
+  #   restart: always
+  #   command:
+  #     ["flower", "--broker=amqp://guest:guest@rabbitmq:5672", "--port=8888"]
+  #   environment:
+  #     - TZ=Asia/Seoul
+  #   ports:
+  #     - 8888:8888
+  #   networks:
+  #     - main
+  #   depends_on:
+  #     - rabbitmq
+  #     - celery_worker_1
+  #     - celery_worker_2
+  #     - celery_worker_3
+  #     - celery_worker_4
+  #     - celery_worker_5
+  #     - celery_worker_6
+
+  redis:
+    image: "redis:alpine"
+    container_name: redis
+    hostname: redis
+    restart: always
+    expose:
+      - "6379"
+    networks:
+      - main
+
+networks:
+  main:
+
+volumes:
+  postgresql-data:
+  static:
+  upload:
+  portainer_data:

@@ -1,0 +1,52 @@
+.at-footer {
+  background-color: #1a1a1a;
+  color: #b7b7b7;
+  font-size: 12px;
+}
+
+.at-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0;
+}
+.at-links {
+  background: #1a1a1a;
+  color: #b7b7b7;
+  border-left: 0px;
+  border-right: 0px;
+  height: 160px;
+  padding-top: 25px;
+}
+.bottom_logo {
+  float: left;
+}
+.com_info {
+  float: left;
+}
+.ban_inqu {
+  float: left;
+}
+.pull-right {
+  float: right;
+}
+.bottom_qna {
+  background-color: #c51f1c;
+  padding: 14px 86px;
+  font-weight: bold;
+  border-radius: 5px;
+  margin-bottom: 5px;
+  text-align: center;
+}
+.bottom_pnm {
+  background-color: #383838;
+  padding: 14px 86px;
+  font-weight: bold;
+  border-radius: 5px;
+}
+.at-infos {
+  margin: 10px auto;
+  width: 600px;
+}
+.pull-right a {
+  color: white;
+}
