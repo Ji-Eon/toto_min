@@ -2,19 +2,19 @@ import React from 'react';
 import styled from 'styled-components';
 
 const Container = styled.div `
-  width:5%;
-  height:100%;
-  display:display;
-  margin-top:25px;
+  width:20%;
+  height:auto;
+  background:#FFFFFF;
   justify-content: space-between;
-  float:left;
+  text-align:right;
+  margin-right:50px;;
+  margin-top:50px;
+
 `;
 const Logo = styled.img `
   width: 160px;
   height:400px;
-  margin-top:30px;
-  margin-left:50px;
-  margin;
+
   cursor: pointer;
 `;
 
@@ -22,7 +22,7 @@ const LeftBanner = (props) => {
 
     return (
         <Container>
-            <div>
+            <div >
                 <Logo src='https://i.imgur.com/vLeyaAS.gif' alt='Bodeum-logo' />
             </div>
             <div>

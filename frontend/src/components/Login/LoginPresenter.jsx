@@ -58,7 +58,7 @@ const BannerContainer = styled.div`
   float:center;
   margin-top:25px;
 `;
-const Logo = styled.img `
+const LeftLogo = styled.img `
   width: 350px;
   height:65px;
   margin-left:20px;
@@ -92,6 +92,7 @@ const LoginPresenter = (props) => {
 
         </Container>
     );
+
 };
 
 export default LoginPresenter;

@@ -2,16 +2,17 @@ import React from 'react';
 import styled from 'styled-components';
 
 const Container = styled.div `
-  width:15%;
-  height:100%;
-  display:display;
-  margin-top:25px;
-  float:right;
+  width:20%;
+  height:auto;
+  background:#FFFFFF;
+  justify-content: space-between;
+  text-align:left;
+  margin-left:50px;;
+  margin-top:50px;
 `;
 const Logo = styled.img `
   width: 160px;
   height: 400px;
-  margin-top:30px;
   cursor: pointer;
 `;
 

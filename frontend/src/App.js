@@ -1,12 +1,17 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import styled, { createGlobalStyle } from 'styled-components';
+import { useMediaQuery } from 'react-responsive';
 
 import TopNavigation from './components/TopNavigation'
-import Home from './Router/Home';
+import Login from './components/Login'
+import LeftBanner from './components/Banner/LeftBanner'
+import RightBanner from './components/Banner/RightBanner'
+
+
+
 import Footer from './components/Footer/Footer';
-import SideBanner from './components/SideBanner/SideBanner';
-import Login from './components/Login';
+import ResponsiveLayout from './layout/ResponsiveLayout';
 
 const GlobalStyle = createGlobalStyle`
   body{
@@ -22,40 +27,31 @@ const GlobalStyle = createGlobalStyle`
 `;
 
 const Container = styled.div`
-  display: grid;
-  height: calc(100vh - 335px);
-  grid-template-areas: 
-  'header'
-  'main'
-  'footer'
-  ;
-  /* grid-template-rows: 88px 1fr 220px; */
-`;
-const MainContainer = styled.div`
-  display: flex;
-  gap: 10px;
-  width: 1200px;
-  margin: 10px auto;
-  grid-area: 'main';
+  width:100%;
+  height:100%;
+
 `;
 
 const App = () => {
 
   return (
     <BrowserRouter>
-      <GlobalStyle />
-      <Container className='app-container'>
-        <TopNavigation />
-        <SideBanner />
-        <MainContainer className='main-cotainer'>
-          <Login />
-          <Routes>
-            <Route path="/" element={<Home />} />
-          </Routes>
-        </MainContainer>
-        <Footer />
-      </Container>
-    </BrowserRouter>
+          <GlobalStyle />
+          <Container>
+            <div>
+            {/* <TopNavigation />
+            <LeftBanner/>
+            <Login/>
+
+            <RightBanner/> */}
+            </div>
+            
+            <Routes>
+              <Route path="/" element={<ResponsiveLayout />} />
+
+            </Routes>
+          </Container>
+        </BrowserRouter>
   )
 };
 
